@@ -1,0 +1,154 @@
+---
+title: "Practical Machine Learining Assingment"
+author: "Roberto Rossiello"
+date: "30/8/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is the assignment of the Practical Machine Learnign from Coursera.
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Loading Libraries
+
+```{r}
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(janitor)
+library(corrplot)
+
+set.seed(666)
+```
+
+## Loading Data
+
+We'll get the data for this assignemt from the urls provided in the description
+
+```{r}
+TrainDataURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+TestDataURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+TrainingData <- read.csv(url(TrainDataURL))
+TestingData <- read.csv(url(TestDataURL))
+```
+
+```{r}
+dim(TrainingData)
+```
+
+```{r}
+dim(TestingData)
+```
+
+## Cleaning Data
+
+We need to remove all empty fields and the ones with the '#DIV/0!' values because they are not useful to the analysis.
+
+```{r}
+inTrain <- createDataPartition(TrainingData$classe, p=0.7, list = FALSE)
+training <- TrainingData[inTrain,]
+testing <- TrainingData[-inTrain,]
+
+not_any_na <- function(x) all(!is.na(x))
+not_any_div0 <- function(x) all(x != "#DIV/0!")
+
+trainingComplete <- training %>% select_if(not_any_na)
+trainingComplete <- trainingComplete %>% select_if(not_any_div0)
+trainingComplete <- remove_empty(trainingComplete, which = "cols")
+trainingComplete <- trainingComplete[, -c(1:7)]
+```
+
+```{r}
+dim(trainingComplete)
+```
+
+## Training
+
+I'll try to approach the problem by using 3 different algorithms:
+
+- Random forest
+- Generalized Boosted Method
+- LDA
+
+I'll compare the results of each one to decide what algorithm is best suited to handle the problem in this assignment.
+
+### Random Forest
+
+Firstly I will try using the random forest algorithm.
+
+```{r}
+controlRF <- trainControl(method="repeatedcv", number=3, verboseIter=TRUE)
+modelRF <- train(classe ~ ., data=trainingComplete, method="rf", trControl=controlRF)
+```
+
+Once the training process is completed I will measure the performances against the `testing` subset of the TrainingData provided.
+
+```{r, echo=FALSE}
+predictRF <- predict(modelRF, testing)
+confusionMatrix(testing$classe, predictRF)
+```
+
+We can see that the results are quite good reaching an Accurancy of `0.9941`.
+
+### Generalized Boosted Method
+
+I'll continue my search by trying to train using the GBM algorithm.
+
+```{r, echo = T, results = 'hide'}
+controlGBM <- trainControl(method="repeatedcv", number=3, repeats=1, verboseIter=FALSE)
+modelGBM <- train(classe ~ ., data=trainingComplete, method="gbm", trControl=controlGBM)
+```
+
+As I have previously done I will now test this model using the same `testing` set as before.
+
+```{r}
+predictGBM <- predict(modelGBM, testing)
+confusionMatrix(testing$classe, predictGBM)
+```
+
+We can see that, even if the results are still high having an Accurancy of 0.9618, the model based on Random Forest is still the better one.
+
+### Latent Dirichlet Allocation
+
+I'll conclude the training by using the LDA algorithm.
+
+```{r}
+modelLDA <- train(classe ~ ., data=trainingComplete, method="lda")
+```
+
+For the last time I'll proceed by testing this model in the same way as for the previous onces.
+
+```{r}
+predictLDA <- predict(modelLDA, testing)
+confusionMatrix(testing$classe, predictLDA)
+```
+
+As we can see this approach is evidently wrong measuring an Accurancy of just 0.7004.
+
+## Predict
+
+My model of choice for the prediction on the TestingData will be the one based on Random Forest.
+
+```{r}
+predict(modelRF, TestingData)
+```
+
